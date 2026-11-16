@@ -1,0 +1,83 @@
+// Prisma schema for the Library Management System
+// Database: PostgreSQL (hosted on Neon)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Application roles. Only ADMIN accounts may manage books, stock and users.
+enum Role {
+  ADMIN
+  USER
+}
+
+/// The kind of movement recorded against a book.
+enum TransactionType {
+  BORROW
+  RETURN
+  STOCK_ADDITION
+}
+
+/// Status of a transaction record.
+enum TransactionStatus {
+  COMPLETED
+  PENDING
+  CANCELLED
+}
+
+model User {
+  id                 Int           @id @default(autoincrement())
+  fullName           String
+  membershipId       String        @unique
+  email              String        @unique
+  password           String // bcrypt hash, never the plain text password
+  role               Role          @default(USER)
+  mustChangePassword Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  transactions Transaction[]
+
+  @@map("users")
+}
+
+model Book {
+  id        Int      @id @default(autoincrement())
+  title     String
+  author    String
+  genre     String
+  isbn      String   @unique
+  quantity  Int      @default(0) // total copies owned
+  available Int      @default(0) // copies currently on the shelf
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions Transaction[]
+
+  @@map("books")
+}
+
+/// The library ledger. Rows are kept forever so history is preserved.
+model Transaction {
+  id       Int               @id @default(autoincrement())
+  type     TransactionType
+  status   TransactionStatus @default(COMPLETED)
+  quantity Int
+  bookId   Int
+  userId   Int
+  note     String?
+  createdAt DateTime         @default(now())
+
+  // Restrict: a book/user that appears in the ledger cannot be hard deleted.
+  book Book @relation(fields: [bookId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([bookId])
+  @@index([userId])
+  @@map("transactions")
+}
